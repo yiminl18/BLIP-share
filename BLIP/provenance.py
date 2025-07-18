@@ -2,7 +2,6 @@ from IPython.core.hooks import pre_prompt_hook
 from pdfminer.high_level import extract_text
 import os,sys,nltk,time,json
 import tiktoken
-from doc_provenance import data_digestion
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
@@ -21,7 +20,7 @@ embedding_sentence_block_size = 1
 current_file_directory = os.path.dirname(os.path.abspath(__file__))
 parent_directory = os.path.dirname(current_file_directory)
 sys.path.append(current_file_directory)
-from doc_provenance.model import model 
+from BLIP.model import model 
 model_expensive = ''
 model_cheap = ''
 
@@ -159,18 +158,15 @@ def count_tokens(text, model="gpt-4o-mini"):
 
 
 def QA(question, context):
-    #print(len(context))
     if len(context) == 0:
         return ['NULL'], 0, 0
     prompt = (question[0] + question[1], context)
-    #print('Prompt:', prompt[0], prompt[1])
     response = model(model_cheap, prompt)
     print('Response:', response)
 
     if response is None:
         return ['NULL'], 0, 0
     
-    #print('QA response is:', response)
     if('|' in response):
         ans = [o.strip() for o in response.split('|')]
     else:
@@ -198,8 +194,6 @@ def equal_string(res1, res2):
     if(len(res1) != len(res2)):
         return False
     res1_lower = []
-    # print('before:',res1)
-    # print('before:',res2)
     for r in res1:
         r = str(r)
         res1_lower.append(eval_equivelance_rules(r).lower())
@@ -230,8 +224,6 @@ def equal_string(res1, res2):
 def equal(res1, res2, question, metric = 'string'):
     res1 = sorted(res1)
     res2 = sorted(res2)
-    #print(len(res1), len(res2))
-    #res1 and res2 are both list of strings 
     if(metric == 'string'):
         return equal_string(res1, res2)
     else:
@@ -246,7 +238,6 @@ def equal(res1, res2, question, metric = 'string'):
                 return False
         instruction = 'I have two answers to the given question. If these two answers are equivalent in meaning, return True; otherwise, return False. Do not provide any explanation. ' + 'Answer 1: ' + ''.join(res1) + ' Answer 2: ' + ''.join(res2) + ' Question: ' + question[0] 
         if equal_string(res1, res2):
-            #print('Return true in string metric')
             return True
         if len(res1) != len(res2):
             return False 
@@ -259,14 +250,7 @@ def equal(res1, res2, question, metric = 'string'):
         if(len(res1) == 1 and len(res2) == 1):
             str1 = res1[0]
             str2 = res2[0]
-            # if len(str1) > 2*len(str2) or len(str2) > 2*len(str1):
-            #     print('length mis-match')
-            #     return False
-            # if len(str1) < 20 and len(str2) < 20: 
-            #     #print('Evaluated in string')
-            #     return equal_string(res1, res2)
             response = model(model_expensive, (instruction, ''))
-            #print(instruction)
             if('true' in response.lower()):
                 return True
             return False
@@ -277,9 +261,6 @@ def evaluate(answers, question, ids, sentences, context = '', metric = 'string')
         for id in ids:
             context += sentences[id]
     pred_ans, input_tokens, output_tokens = QA(question, context)
-    print('predicted answer:', pred_ans)
-    print('original answer:', answers)
-    #print('metric:', metric)
     st = time.time()
     if(equal(pred_ans, answers, question, metric)):
         et = time.time()
@@ -298,15 +279,11 @@ def sequential_greedy_operator(question, answers, sentences, sorted_idx, metric 
     output_tokens = 0
     total_eval_latency = 0
 
-    #print(len(sentences))
     if len(sorted_idx) == 0:
         sorted_idx = list(range(len(sentences)))
 
-    #print(sorted_idx)
-
     for i in sorted_idx:
         print('Iterating sentence ',i, len(sorted_idx))
-        #print(sentences[i])
         remaining_sentences_id = []
         for j in sorted_idx:
             if j in removed_sentences:
@@ -356,9 +333,6 @@ def exponential_greedy_single_pass(question, answers, sentences, sorted_idx, met
     input_tokens = 0
     output_tokens = 0
     total_eval_latency = 0
-
-    #print(sorted_idx)
-
     skip_ids = [] # the sentence ids to skip in current iteration
     skip_ids_idx = [] # the index in sorted_idx to skip in current iteration
     skip_ids_idx.append(0)
@@ -366,7 +340,6 @@ def exponential_greedy_single_pass(question, answers, sentences, sorted_idx, met
     
     
     i = 0
-    #print('sorted_idx:', sorted_idx)
 
     while True:#iterate sentences stored in skip_ids to check if delete
         if skip_ids_idx[0] >= len(sorted_idx):
@@ -381,16 +354,12 @@ def exponential_greedy_single_pass(question, answers, sentences, sorted_idx, met
             remaining_sentences_id.append(i)
 
         sorted_remaining_sentences_id = sorted(remaining_sentences_id)
-        print('skip_ids_idx:', skip_ids_idx)
-        print('skip_ids:', skip_ids)
-        
         eval_result, input_token, output_token, eval_latency = evaluate(answers, question, sorted_remaining_sentences_id, sentences, metric = metric)
-        print('eval:', eval_result)
         total_eval_latency += eval_latency
         input_tokens += input_token
         output_tokens += output_token
 
-        #print(skip_ids, eval_result)
+        print(skip_ids, eval_result)
 
         if eval_result == True:#if removing this sentence does not change the final answers, then these sentences can be removed 
             removed_sentences += skip_ids
@@ -421,24 +390,18 @@ def exponential_greedy_operator(question, answers, sentences, sorted_idx, metric
     total_input_tokens = 0
     total_output_tokens = 0
     sorted_ids = sorted(sorted_idx)
-    print('sorted_idx:', sorted_idx)
-    #the first pass 
+    #print('sorted_idx:', sorted_idx)
     pre_provenance_id, (input_tokens, output_tokens), eval_latency = exponential_greedy_single_pass(question, answers, sentences, sorted_idx, metric = metric)
     total_eval_latency += eval_latency
     total_input_tokens += input_tokens
     total_output_tokens += output_tokens
 
-    print('first pass:', pre_provenance_id)
-    # the second pass 
     while True:
-        if len(pre_provenance_id) > 20:
-            provenance_id, (input_tokens, output_tokens), eval_latency = exponential_greedy_single_pass(question, answers, sentences, pre_provenance_id, metric = metric)
-        else:
-            provenance_id, (input_tokens, output_tokens), eval_latency = sequential_greedy_operator(question, answers, sentences, pre_provenance_id, metric = metric)
+        provenance_id, (input_tokens, output_tokens), eval_latency = exponential_greedy_single_pass(question, answers, sentences, pre_provenance_id, metric = metric)
+        
         total_eval_latency += eval_latency
         total_input_tokens += input_tokens
         total_output_tokens += output_tokens
-        print(len(provenance_id), len(pre_provenance_id))
         if len(provenance_id) == len(pre_provenance_id):
             break
         pre_provenance_id = provenance_id
@@ -489,7 +452,7 @@ def sort_sentences_by_similarity(question, answers, sentences, file_path):
     i = 0
     sentences, id_mp = group_sentences(sentences, k = 5)
     for sentence in sentences:
-        print(i, len(sentences))
+        print('Build Embeddding...', i, len(sentences))
         if sentence not in embeddings:
             embeddings[sentence] = get_embedding(sentence)
         sentence_embedding = embeddings[sentence]
@@ -515,9 +478,6 @@ def sort_sentences_by_similarity(question, answers, sentences, file_path):
 
 def embedding_sufficient_top_down_operator(question, answers, sentences, embedding_path, metric = 'string'):
     sorted_indices, similarity_scores, group_sentences, id_mp = sort_sentences_by_similarity(question, answers, sentences, embedding_path)
-    # for idx in sorted_indices[:20]:
-    #     print(idx, group_sentences[idx], similarity_scores[group_sentences[idx]])
-    #     print(id_mp[idx])
     
     total_eval_latency = 0
     queue = deque()
@@ -531,13 +491,10 @@ def embedding_sufficient_top_down_operator(question, answers, sentences, embeddi
         current_sentences = []
         for i in sorted_indices[:current_k]:
             current_sentences += id_mp[i]
-        print(current_k, current_sentences)
         eval_result, input_tokens, output_tokens, eval_latency = evaluate(answers, question, current_sentences, sentences, context = '', metric = metric)
-        print(eval_result)
         total_eval_latency += eval_latency
         sum_input_tokens += input_tokens
         sum_output_tokens += output_tokens
-        #print('last_k:', last_k)
         if eval_result:
             mid = round(current_k / 2)
             queue.append(mid)
@@ -549,15 +506,30 @@ def embedding_sufficient_top_down_operator(question, answers, sentences, embeddi
             for i in sorted_indices[:last_k]:
                 out_sentences += id_mp[i]
             return out_sentences, (sum_input_tokens, sum_output_tokens),total_eval_latency
-            
-    #return sorted_indices[:last_k], (sum_input_tokens, sum_output_tokens),total_eval_latency
 
-def embedding_sufficient_bottem_up_operator(question, answers, sentences, embedding_path, metric = 'string', step = 1):
+def embedding_adaptive_operator(question, answers, sentences, embedding_path, metric = 'string', step = 1):
+    provenance_ids = []
+    BU_provenance_ids, (BU_input_tokens, BU_output_tokens), BU_eval_latency = embedding_sufficient_bottem_up_operator(question, answers, sentences, embedding_path, metric = metric, step = step, adaptive_flag=1)
+    if len(BU_provenance_ids) == 0: #switch to top_down
+        TD_provenance_ids, (TD_input_tokens, TD_output_tokens), TD_eval_latency = embedding_sufficient_top_down_operator(question, answers, sentences, embedding_path, metric = metric, step = step) 
+        provenance_ids = TD_provenance_ids
+        return provenance_ids, (BU_input_tokens + TD_input_tokens, BU_output_tokens + TD_output_tokens), BU_eval_latency + TD_eval_latency
+
+    else:
+        provenance_ids = BU_provenance_ids
+        return BU_provenance_ids, (BU_input_tokens, BU_output_tokens), BU_eval_latency
+    
+def LLM_adaptive_operator(question, answers, sentences, embedding_path, metric = 'string'):
+    BU_provenance_ids, (BU_input_tokens, BU_output_tokens), BU_eval_latency = LLM_score_sufficient_bottem_up_operator(question, answers, sentences, embedding_path, metric = metric, adaptive_flag=1)
+    if len(BU_provenance_ids) == 0: #switch to top_down
+        TD_provenance_ids, (TD_input_tokens, TD_output_tokens), TD_eval_latency = LLM_score_sufficient_top_down_operator(question, answers, sentences, embedding_path, metric = metric) 
+        return TD_provenance_ids, (BU_input_tokens + TD_input_tokens, BU_output_tokens + TD_output_tokens), BU_eval_latency + TD_eval_latency
+    else:
+        return BU_provenance_ids, (BU_input_tokens, BU_output_tokens), BU_eval_latency
+    
+
+def embedding_sufficient_bottem_up_operator(question, answers, sentences, embedding_path, metric = 'string', step = 1, adaptive_flag = 0):
     sorted_indices, similarity_scores, group_sentences, id_mp = sort_sentences_by_similarity(question, answers, sentences, embedding_path)
-    #print(answers)
-    # for idx in sorted_indices[:20]:
-    #     #print(idx, group_sentences[idx], similarity_scores[group_sentences[idx]])
-    #     print(id_mp[idx])
     total_eval_latency = 0
     queue = deque()
     queue.append(len(sorted_indices))
@@ -573,12 +545,14 @@ def embedding_sufficient_bottem_up_operator(question, answers, sentences, embedd
         for i in sorted_indices[:id]:
             current_sentences += id_mp[i]
         eval_result, input_tokens, output_tokens, eval_latency = evaluate(answers, question, current_sentences, sentences, context = '', metric = metric)
-        print(current_sentences, eval_result)
+        #print(current_sentences, eval_result)
         total_eval_latency += eval_latency
         sum_input_tokens += input_tokens
         sum_output_tokens += output_tokens
         if eval_result:
             return current_sentences, (sum_input_tokens, sum_output_tokens),total_eval_latency
+        if adaptive_flag == 1 and id > 8.4:
+            return [], (sum_input_tokens, sum_output_tokens),total_eval_latency
     return list(range(len(sentences))), (sum_input_tokens, sum_output_tokens),total_eval_latency
 
 def divide_and_conquer_sufficient_operator(question, answers, sentences, sorted_idx, metric = 'string', stop_sentence_length = 5):
@@ -742,18 +716,18 @@ def block_labeler(sentences, question, answers, blk_num):
     instruction = 'Given the following question: ' + question[0] + ' and a list of text blocks, the corresponding answers are: ' + ','.join(answers) +  '. Your task is to assign a score (from 1 to 10) to each block based on how likely it is to contain context relevant to answering the question. The text blocks are listed below, each starting with Block i: followed by its content. Return only a comma-separated list of scores corresponding to each block, in the order they are given. Do not include any explanations or additional text. '
     context = ''
     #print(instruction)
-    print(len(blocks))
+    #print(len(blocks))
     for id in range(len(blocks)):
         context += 'Block ' + str(id) + ': ' + blocks[id] + '\n'
-    print(len(context))
+    #print(len(context))
     prompt = (instruction, context)
     #print(count_tokens(context))
-    response = model('gpt_4o_azure', prompt)
+    response = model(model_cheap, prompt)
     response = response.strip()
-    print(response)
+    #print(response)
     if response.endswith(","):
         response = response[:-1]
-    print(response)
+    #print(response)
     scores = [int(num.strip()) for num in response.split(",")]
     block_scores = {}
     #print(scores)
@@ -783,17 +757,11 @@ def get_block_sentences(block_list):
 def LLM_score_sufficient_top_down_operator(question, answers, sentences, sorted_idx, metric = 'string', k=5):
     blk_num = len(sentences)/k
     blk_num = min(20, blk_num)
-    print('block number:',blk_num)
     total_eval_latency = 0
-    block_scores, blocks_sentences_id = block_labeler_individual(sentences, question, answers, blk_num)
-    # for id, score in block_scores.items():
-    #     print(id, score)
-    #     print(blocks_sentences_id[id])
+    block_scores, blocks_sentences_id = block_labeler(sentences, question, answers, blk_num)
     sorted_block_dict = dict(sorted(block_scores.items(), key=lambda item: item[1], reverse=True))
     sorted_block = []
     for id, score in sorted_block_dict.items():
-        # print(id, score)
-        # print(blocks_sentences_id[id])
         sorted_block.append(blocks_sentences_id[id])
 
 
@@ -802,17 +770,12 @@ def LLM_score_sufficient_top_down_operator(question, answers, sentences, sorted_
     last_k = len(block_scores) 
     sum_input_tokens = 0
     sum_output_tokens = 0
-    #print('block_size:',len(block_scores))
 
     while queue:
         current_k = int(queue.popleft())
-        print('k:',current_k)
-        # print(sorted_block[:current_k])
         current_sentences = get_block_sentences(sorted_block[:current_k])
-        # print('current sentences:', current_sentences)
         eval_result, input_tokens, output_tokens, eval_latency = evaluate(answers, question, current_sentences, sentences, context = '', metric = metric)
         total_eval_latency += eval_latency
-        print('eval:', eval_result)
         sum_input_tokens += input_tokens
         sum_output_tokens += output_tokens
         if eval_result:
@@ -826,35 +789,31 @@ def LLM_score_sufficient_top_down_operator(question, answers, sentences, sorted_
         
     return sorted_idx, (sum_input_tokens, sum_output_tokens)
 
-def LLM_score_sufficient_bottem_up_operator(question, answers, sentences, sorted_idx, metric = 'string', k=5):
+def LLM_score_sufficient_bottem_up_operator(question, answers, sentences, sorted_idx, metric = 'string', k=5, adaptive_flag = 0):
     blk_num = len(sentences)/k
     blk_num = min(20, blk_num)
     total_eval_latency = 0
     sum_input_tokens = 0
     sum_output_tokens = 0
 
-    print('blk_num:', blk_num)
-
-    block_scores, blocks_sentences_id = block_labeler_individual(sentences, question, answers, blk_num)
+    block_scores, blocks_sentences_id = block_labeler(sentences, question, answers, blk_num)
     sorted_block_dict = dict(sorted(block_scores.items(), key=lambda item: item[1], reverse=True))
     sorted_block = []
     for id, score in sorted_block_dict.items():
-        # print(id, score)
-        # print(blocks_sentences_id[id])
         sorted_block.append(blocks_sentences_id[id])
     current_block = []
     for k in range(1,len(sorted_block)):
         current_block = sorted_block[:k]
-        print('k, current_block:', k, current_block)
         current_sentences = get_block_sentences(current_block)
-        #print('current_sentences:', current_sentences)
         eval_result, input_tokens, output_tokens, eval_latency = evaluate(answers, question, current_sentences, sentences, context = '', metric = metric)
-        print('eval:', eval_result)
         total_eval_latency += eval_latency
         sum_input_tokens += input_tokens
         sum_output_tokens += output_tokens
+        print(k, current_sentences, eval_result)
         if eval_result:
             return current_sentences, (sum_input_tokens, sum_output_tokens),total_eval_latency
+        if adaptive_flag == 1 and k > 8.4:
+            return [], (sum_input_tokens, sum_output_tokens),total_eval_latency
         
     return sorted_idx, (sum_input_tokens, sum_output_tokens),total_eval_latency
 
@@ -875,8 +834,8 @@ def id_2_provenance(response, sentences):
         ids = [int(x) for x in re.findall(r'-?\d+', response)]
         # Filter out indices that are out of range
         ids = [i for i in ids if 0 <= i < len(sentences)]
-        print('response:', response)
-        print(ids)
+        # print('response:', response)
+        # print(ids)
         provenance = [sentences[i] for i in ids]
         return ' '.join(provenance), ids
     except (ValueError, TypeError):
@@ -943,7 +902,7 @@ def LLM_vanilla(question, context, title, path, model_name, type = 'id'):
     out['time'] = et-st
     if type == 'id':
         response, ids = id_2_provenance(response, sentences)
-    print('provenance', response) 
+    #print('provenance', response) 
     out['provenance'] = response
     out['sentence_ids'] = ids 
     if response is None:
@@ -978,6 +937,10 @@ def caller(question, answers, sentences, find_sufficient_provenance_strategy, fi
             sufficient_provenance_ids, (sufficient_input_tokens, sufficient_output_tokens), sufficient_eval_latency = LLM_score_sufficient_top_down_operator(question, answers, sentences, list(range(len(sentences))), metric = metric)
         elif find_sufficient_provenance_strategy == 'LLM_score_sufficient_bottem_up':
             sufficient_provenance_ids, (sufficient_input_tokens, sufficient_output_tokens), sufficient_eval_latency = LLM_score_sufficient_bottem_up_operator(question, answers, sentences, list(range(len(sentences))), metric = metric)
+        elif find_sufficient_provenance_strategy == 'LLM_adaptive':
+            sufficient_provenance_ids, (sufficient_input_tokens, sufficient_output_tokens), sufficient_eval_latency = LLM_adaptive_operator(question, answers, sentences, list(range(len(sentences))), metric = metric)
+        elif find_sufficient_provenance_strategy == 'Embedding_adaptive':
+            sufficient_provenance_ids, (sufficient_input_tokens, sufficient_output_tokens), sufficient_eval_latency = embedding_adaptive_operator(question, answers, sentences, list(range(len(sentences))), metric = metric)
     else: 
         print('Read sufficient provenance locally')
         sufficient_input_tokens = sufficient_tokens[0]
@@ -1015,7 +978,6 @@ def logger(text, q, title, model_name, path, find_sufficient_provenance_strategy
     logs = {} 
     logs['title'] = title
     logs['question'] = question
-    print(question) 
     
     
     sentences = extract_sentences_from_pdf(text, type = data_type)
@@ -1023,8 +985,6 @@ def logger(text, q, title, model_name, path, find_sufficient_provenance_strategy
     if data_type == 'table':
         text = list_to_string(text)
         logs['document_size'] = count_tokens(text) 
-
-    #print(sentences) 
     
 
     if find_sufficient_provenance_strategy == 'LLM_vanilla':
@@ -1047,16 +1007,6 @@ def logger(text, q, title, model_name, path, find_sufficient_provenance_strategy
         logs['status'] = 'NA'#null answers
         write_json_to_file(path, logs)
         return logs 
-    print(len(answers_str))
-    if len(answers_str) > 300:
-        logs['status'] = 'LA'#long answers
-        write_json_to_file(path, logs)
-        return logs 
-    if len(sufficient_provenance_ids) > 100:
-        print('Sufficient does not prune much, skip')
-        logs['status'] = 'SL'#sufficient large
-        write_json_to_file(path, logs)
-        return logs
 
     st = time.time()
     provenance_ids, (input_tokens, output_tokens), eval_latency =  caller(question, answers, sentences, find_sufficient_provenance_strategy, find_minimal_provenance_strategy, metric = metric, embedding_path=embedding_path, sufficient_time = sufficient_time, sufficient_tokens = sufficient_tokens, sufficient_provenance_ids = sufficient_provenance_ids, sufficient_eval_latency = sufficient_eval_latency)
@@ -1080,15 +1030,5 @@ def logger(text, q, title, model_name, path, find_sufficient_provenance_strategy
     print('provenance ids:', provenance_ids)
     print(input_tokens, output_tokens)
     return logs 
-
-if __name__ == "__main__":
-    pdf_path = '/Users/yiminglin/Documents/Codebase/doc-provenance/tests/data/police_records/1715882251765-owf-1.pdf'
-    out_path = '/Users/yiminglin/Documents/Codebase/doc-provenance/tests/out/1715882251765-owf-1.json' 
-
-    question = ('What are the names of police officers who used force with both a Baton and Knee before February 10?', 'Only return the officer names. Do not add explanation. ' )
-
-    pdf_text = extract_text_from_pdf(pdf_path)
-    set_model('gpt_4o_mini_azure')
-    LLM_vanilla(question, pdf_text, '1715882251765-owf-1', out_path, 'gpt_4o_mini_azure', type = 'id')
 
     

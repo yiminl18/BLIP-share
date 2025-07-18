@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 api_key_folder_path = '' #update with your path
-api_file_name = ''
+api_file_name = '' #update with your path
 
 # reads gemini's api key from folder in the home directory named 'api_keys'
 def read_api_key(filename=api_file_name, api_key_folder = api_key_folder_path):

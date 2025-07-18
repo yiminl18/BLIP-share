@@ -1,1 +1,1 @@
-Run 'pip install -e .' to import doc_provenance in test codes
+Run 'pip install -e .' to import BLIP in test codes

@@ -1,8 +1,12 @@
 import os
 from openai import AzureOpenAI
 
-def gpt_4o_mini_azure(input, 
-                            key_path='/Users/yiminglin/Documents/Codebase/api_keys/azure_openai/azuregpt4omini.txt',
+api_key_path = ''
+ENDPOINT_URL = ''
+api_version_name = ''
+
+def gpt_4o_azure(input, 
+                            key_path=api_key_path,
                             max_tokens=800,
                             temperature=0):
     """
@@ -24,14 +28,14 @@ def gpt_4o_mini_azure(input,
     
     # Initialize client
     client = AzureOpenAI(
-        azure_endpoint=os.getenv("ENDPOINT_URL", "https://doc-provenance.openai.azure.com/"),
+        azure_endpoint=os.getenv("ENDPOINT_URL", ENDPOINT_URL),
         api_key=api_key,
-        api_version="2025-01-01-preview",
+        api_version=api_version_name,
     )
     
     # Generate response
     completion = client.chat.completions.create(
-        model=os.getenv("DEPLOYMENT_NAME", "gpt-4o-mini"),
+        model=os.getenv("DEPLOYMENT_NAME", "gpt-4o"),
         messages=[{"role": "user", "content": prompt}],
         max_tokens=max_tokens,
         temperature=temperature,

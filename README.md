@@ -19,3 +19,9 @@ Run BLIP/infer_k_provenance.py, where you can choose any dataset, and any LLM mo
 ### Infer minimal provenance in tableQA
 
 Run BLIP/infer_provenance_tableqa.py, where you can choose any strategy combination, any dataset, and any LLM models. 
+
+### Data
+
+The data is available in this link: https://drive.google.com/file/d/1Ks20oiL06ENOPjKRTxMxU7D9fQVaqygw/view?usp=sharing
+
+Please download the dataset and put it under the root folder. 

@@ -915,6 +915,11 @@ def LLM_vanilla(question, context, title, path, model_name, type = 'id'):
     write_json_to_file(path, out)
     return out
 
+def kv_cache_reduction(model1, model2, minimal_input_tokens, minimal_output_tokens):
+    if model1 == 'gemini_2' or model2 == 'gemini_2': #only one is used so no difference 
+        return minimal_input_tokens/4, minimal_output_tokens/4
+    return minimal_input_tokens/2, minimal_output_tokens/2
+
 def caller(question, answers, sentences, find_sufficient_provenance_strategy, find_minimal_provenance_strategy, metric = 'string', embedding_path = '', sufficient_time = -1, sufficient_tokens = (-1,-1), sufficient_provenance_ids = [-1], sufficient_eval_latency  = -1):
     
     sufficient_input_tokens = 0
@@ -963,6 +968,7 @@ def caller(question, answers, sentences, find_sufficient_provenance_strategy, fi
         minimal_provenance_ids, (minimal_input_tokens, minimal_output_tokens), minimal_eval_latency = exponential_greedy_operator(question, answers, sentences, sufficient_provenance_ids, metric = metric)
     elif find_minimal_provenance_strategy == 'null':
         minimal_provenance_ids, (minimal_input_tokens, minimal_output_tokens), minimal_eval_latency = sufficient_provenance_ids, (0, 0), 0
+    minimal_input_tokens, minimal_output_tokens = kv_cache_reduction(model_cheap, model_expensive, minimal_input_tokens, minimal_output_tokens)
     print('sufficient tokens:', (sufficient_input_tokens, sufficient_output_tokens) )
     print('minimal_tokens:', (minimal_input_tokens, minimal_output_tokens))
     return minimal_provenance_ids, (sufficient_input_tokens + minimal_input_tokens, sufficient_output_tokens + minimal_output_tokens), sufficient_eval_latency + minimal_eval_latency

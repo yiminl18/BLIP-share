@@ -97,9 +97,6 @@ def provenance_run(data, data_path, embedding_folder, result_folder_path, model_
         for sufficient_provenance_strategy in sufficient_provenance_strategy_pool:
             for minimal_provenance_strategy in minimal_provenance_strategy_pool:
                 strategy = sufficient_provenance_strategy + '_' + minimal_provenance_strategy
-
-                if sufficient_provenance_strategy != 'LLM_adaptive':
-                    continue  
                 
                 embedding_path = get_embedding_path(data, embedding_folder, i, o)
                 result_path = get_result_path(data, result_folder_path, i, o, strategy, model_name)

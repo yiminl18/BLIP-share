@@ -1,9 +1,0 @@
-{
-    "question": [
-        "What are the aesthetic emotions formalized?",
-        "Only return answers. Do not add explanations. If answers are not found in the given context, return NULL. Context: "
-    ],
-    "answer": [
-        "input model does not exist"
-    ]
-}
